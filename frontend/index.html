@@ -41,6 +41,9 @@
       <span class="example-chip" data-smiles="c1ccoc1">Furan</span>
       <span class="example-chip" data-smiles="c1ccccc1N">Aniline</span>
       <span class="example-chip" data-smiles="CC(=O)Oc1ccccc1C(=O)O">Aspirin</span>
+      <span class="example-chip reaction-chip" data-smiles="CCO>>CC=O">Ethanol oxidation</span>
+      <span class="example-chip reaction-chip" data-smiles="c1ccccc1C(=O)O.CCO>>c1ccccc1C(=O)OCC">Esterification</span>
+      <span class="example-chip reaction-chip" data-smiles="c1ccccc1[N+](=O)[O-]>>c1ccccc1N">Nitrobenzene reduction</span>
     </div>
 
     <div id="status-bar"></div>
@@ -53,7 +56,7 @@
     <div class="canvas-wrapper">
       <canvas
         id="structure-canvas"
-        width="720"
+        width="900"
         height="420"
         title="2D chemical structure"
       ></canvas>
@@ -127,8 +130,13 @@
 
     try {
       renderer.draw(smiles);
-      setStatus(`✅ Rendered: ${smiles}`, 'success');
-      showInfo(renderer.molecule, smiles);
+      if (smiles.includes('>>')) {
+        setStatus(`✅ Rendered reaction: ${smiles}`, 'success');
+        showReactionInfo(renderer.reactionData, smiles);
+      } else {
+        setStatus(`✅ Rendered: ${smiles}`, 'success');
+        showInfo(renderer.molecule, smiles);
+      }
     } catch (err) {
       setStatus('⚠️ Error: ' + err.message, 'error');
       console.error(err);
@@ -154,12 +162,25 @@
 
     infoEl.innerHTML = `
       <table>
+        <tr><td>Mode</td><td>Single molecule</td></tr>
         <tr><td>SMILES</td><td><code>${escapeHtml(smiles)}</code></td></tr>
         <tr><td>Atom count</td><td>${molecule.atoms.length}</td></tr>
         <tr><td>Bond count</td><td>${molecule.bonds.length}</td></tr>
         <tr><td>Formula</td><td>${formula}</td></tr>
         <tr><td>Aromatic rings</td><td>${ringInfo}</td></tr>
         <tr><td>Ring attachment</td><td>✅ Vertex-based (not center)</td></tr>
+      </table>
+    `;
+  }
+
+  function showReactionInfo(reactionData, smiles) {
+    const { reactants, products } = reactionData;
+    infoEl.innerHTML = `
+      <table>
+        <tr><td>Mode</td><td>Reaction scheme</td></tr>
+        <tr><td>Reaction SMILES</td><td><code>${escapeHtml(smiles)}</code></td></tr>
+        <tr><td>Reactants</td><td>${reactants.length}: ${reactants.map(s => `<code>${escapeHtml(s)}</code>`).join(' + ')}</td></tr>
+        <tr><td>Products</td><td>${products.length}: ${products.map(s => `<code>${escapeHtml(s)}</code>`).join(' + ')}</td></tr>
       </table>
     `;
   }
