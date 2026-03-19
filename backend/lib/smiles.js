@@ -13,7 +13,7 @@
 
 'use strict';
 
-const ELEMENT_PATTERN = /^([A-Z][a-z]?|[cnosbp])/;
+const ELEMENT_PATTERN = /^(Cl|Br|[A-Z]|[cnosbp])/;
 const AROMATIC_ATOMS = new Set(['c', 'n', 'o', 's', 'p', 'b']);
 
 /**
@@ -41,7 +41,7 @@ function parseSMILES(smiles) {
     const idx = atoms.length;
     atoms.push({
       index: idx,
-      symbol: isAromatic ? symbol : symbol.toUpperCase(),
+      symbol: isAromatic ? symbol : symbol.charAt(0).toUpperCase() + symbol.slice(1),
       isAromatic,
       charge: 0,
       hCount: 0
