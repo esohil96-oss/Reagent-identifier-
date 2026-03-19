@@ -22,6 +22,49 @@ const ATOM_RADIUS = 8;        // px – clearance circle around atom label
 // ---------------------------------------------------------------------------
 
 /**
+ * After all atoms have been placed by layoutMolecule, compute the bounding
+ * box of every atom and translate the whole molecule (atoms + ring vertices)
+ * so that the bounding-box centre lands exactly on (cx, cy).
+ *
+ * @param {Molecule} molecule
+ * @param {number} cx  – desired centre X on canvas
+ * @param {number} cy  – desired centre Y on canvas
+ */
+function centerMolecule(molecule, cx, cy) {
+  const { atoms } = molecule;
+  if (atoms.length === 0) return;
+
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+
+  atoms.forEach(atom => {
+    if (atom.x < minX) minX = atom.x;
+    if (atom.x > maxX) maxX = atom.x;
+    if (atom.y < minY) minY = atom.y;
+    if (atom.y > maxY) maxY = atom.y;
+  });
+
+  const dx = cx - (minX + maxX) / 2;
+  const dy = cy - (minY + maxY) / 2;
+
+  // Shift every atom
+  atoms.forEach(atom => {
+    atom.x += dx;
+    atom.y += dy;
+  });
+
+  // Shift every ring centre and its vertices so drawing stays in sync
+  molecule.aromaticRings.forEach(ring => {
+    ring.centerX += dx;
+    ring.centerY += dy;
+    ring.vertices.forEach(v => {
+      v.x += dx;
+      v.y += dy;
+    });
+  });
+}
+
+/**
  * Assign (x, y) coordinates to all atoms using a depth-first walk.
  * Aromatic ring atoms are placed on their ring vertices; substituents
  * are grown outward from those vertices.
@@ -355,8 +398,11 @@ function buildMolecule(smiles, cx, cy) {
   molecule.bonds = bonds;
 
   const rawRings = detectAromaticRings(atoms, bonds);
+  // Center the ring group around (cx, cy) so a single ring lands exactly
+  // on cx and multiple rings are symmetric about it.
+  const totalRingSpan = (rawRings.length - 1) * (RING_RADIUS * 2.5);
   rawRings.forEach((rawRing, ri) => {
-    const ringCx = cx + ri * (RING_RADIUS * 2.5);
+    const ringCx = cx - totalRingSpan / 2 + ri * (RING_RADIUS * 2.5);
     const aromaticRing = new AromaticRing(
       rawRing.atoms, rawRing.ringSize, ringCx, cy, RING_RADIUS
     );
@@ -364,6 +410,9 @@ function buildMolecule(smiles, cx, cy) {
   });
 
   layoutMolecule(molecule, cx, cy);
+  // Re-center the molecule bounding box on (cx, cy) after full layout so
+  // substituents/chains don't push the structure off-canvas.
+  centerMolecule(molecule, cx, cy);
   return molecule;
 }
 
@@ -473,9 +522,10 @@ class ChemicalStructureRenderer {
     // Detect aromatic rings
     const rawRings = detectAromaticRings(atoms, bonds);
 
-    // Place rings side-by-side if multiple (simple horizontal layout)
+    // Center the ring group around (cx, cy) – symmetric for multiple rings
+    const totalRingSpan = (rawRings.length - 1) * (RING_RADIUS * 2.5);
     rawRings.forEach((rawRing, ri) => {
-      const ringCx = cx + ri * (RING_RADIUS * 2.5);
+      const ringCx = cx - totalRingSpan / 2 + ri * (RING_RADIUS * 2.5);
       const aromaticRing = new AromaticRing(
         rawRing.atoms,
         rawRing.ringSize,
@@ -488,6 +538,8 @@ class ChemicalStructureRenderer {
 
     // Assign 2D coordinates
     layoutMolecule(this.molecule, cx, cy);
+    // Re-center bounding box on canvas center after substituents are placed
+    centerMolecule(this.molecule, cx, cy);
   }
 
   /**
@@ -614,6 +666,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     ChemicalStructureRenderer,
     layoutMolecule,
+    centerMolecule,
     drawAromaticRing,
     drawBond,
     drawAtomLabel,
