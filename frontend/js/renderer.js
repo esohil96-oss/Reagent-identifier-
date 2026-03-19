@@ -299,6 +299,134 @@ function attachMultipleSubstituentsToRing(ctx, ring, atomIndex, substituents) {
 }
 
 // ---------------------------------------------------------------------------
+// Reaction SMILES support
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if the SMILES string represents a reaction (contains '>>').
+ * @param {string} smiles
+ * @returns {boolean}
+ */
+function isReactionSMILES(smiles) {
+  return smiles.includes('>>');
+}
+
+/**
+ * Parse a reaction SMILES string into arrays of reactant and product SMILES.
+ * Format: reactant1.reactant2>>product1.product2
+ *
+ * @param {string} smiles
+ * @returns {{ reactants: string[], products: string[] }}
+ */
+function parseReactionSMILES(smiles) {
+  const parts = smiles.split('>>');
+  if (parts.length !== 2) {
+    throw new Error('Invalid reaction SMILES: expected exactly one ">>" separator');
+  }
+  const reactants = parts[0].split('.').map(s => s.trim()).filter(Boolean);
+  const products  = parts[1].split('.').map(s => s.trim()).filter(Boolean);
+  if (reactants.length === 0) throw new Error(`Reaction SMILES has no reactants: ${smiles}`);
+  if (products.length === 0) throw new Error(`Reaction SMILES has no products: ${smiles}`);
+  return { reactants, products };
+}
+
+/**
+ * Build and lay out a Molecule from a SMILES string centred at (cx, cy).
+ * @param {string} smiles
+ * @param {number} cx
+ * @param {number} cy
+ * @returns {Molecule}
+ */
+function buildMolecule(smiles, cx, cy) {
+  const { atoms, bonds } = parseSMILES(smiles);
+  const molecule = new Molecule();
+  molecule.atoms = atoms.map(a => ({ ...a, x: 0, y: 0 }));
+  molecule.bonds = bonds;
+
+  const rawRings = detectAromaticRings(atoms, bonds);
+  rawRings.forEach((rawRing, ri) => {
+    const ringCx = cx + ri * (RING_RADIUS * 2.5);
+    const aromaticRing = new AromaticRing(
+      rawRing.atoms, rawRing.ringSize, ringCx, cy, RING_RADIUS
+    );
+    molecule.registerAromaticRing(aromaticRing);
+  });
+
+  layoutMolecule(molecule, cx, cy);
+  return molecule;
+}
+
+/**
+ * Render a molecule onto a canvas context (shared render logic).
+ * @param {Molecule} molecule
+ * @param {CanvasRenderingContext2D} ctx
+ */
+function renderMoleculeToCtx(molecule, ctx) {
+  molecule.aromaticRings.forEach(ring => drawAromaticRing(ctx, ring));
+
+  const ringAtomSet = new Set(molecule.aromaticRings.flatMap(r => r.atoms));
+
+  molecule.bonds.forEach(bond => {
+    const fromInRing = ringAtomSet.has(bond.from);
+    const toInRing   = ringAtomSet.has(bond.to);
+
+    if (fromInRing && toInRing) return;
+
+    const a1 = molecule.atoms[bond.from];
+    const a2 = molecule.atoms[bond.to];
+
+    if (fromInRing) {
+      const ring = molecule.getRingForAtom(bond.from);
+      if (ring) {
+        attachSubstituentToRing(ctx, ring, bond.from, a2);
+      } else {
+        drawBond(ctx, a1, a2, bond.order);
+      }
+    } else if (toInRing) {
+      const ring = molecule.getRingForAtom(bond.to);
+      if (ring) {
+        attachSubstituentToRing(ctx, ring, bond.to, a1);
+      } else {
+        drawBond(ctx, a1, a2, bond.order);
+      }
+    } else {
+      drawBond(ctx, a1, a2, bond.order);
+    }
+  });
+
+  molecule.atoms.forEach(atom => drawAtomLabel(ctx, atom));
+}
+
+/**
+ * Draw a horizontal reaction arrow from (x1, y) to (x2, y).
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} x1
+ * @param {number} y
+ * @param {number} x2
+ */
+function drawReactionArrow(ctx, x1, y, x2) {
+  const headSize = 12;
+  ctx.save();
+  ctx.strokeStyle = '#333';
+  ctx.fillStyle   = '#333';
+  ctx.lineWidth   = 2;
+
+  ctx.beginPath();
+  ctx.moveTo(x1, y);
+  ctx.lineTo(x2 - headSize, y);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x2, y);
+  ctx.lineTo(x2 - headSize, y - headSize * 0.5);
+  ctx.lineTo(x2 - headSize, y + headSize * 0.5);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
 // Main renderer class (Part 5 of spec)
 // ---------------------------------------------------------------------------
 
@@ -357,60 +485,114 @@ class ChemicalStructureRenderer {
   render() {
     const { ctx, canvas, molecule } = this;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    renderMoleculeToCtx(molecule, ctx);
+  }
 
-    // 1. Draw aromatic ring outlines
-    molecule.aromaticRings.forEach(ring => drawAromaticRing(ctx, ring));
+  /**
+   * Draw a reaction scheme from a reaction SMILES string.
+   * Lays out reactants on the left, an arrow in the centre, and products
+   * on the right.  Multiple molecules on each side are stacked vertically.
+   *
+   * @param {string} smiles  Reaction SMILES (e.g. "A.B>>C")
+   */
+  drawReactionScheme(smiles) {
+    const { ctx, canvas } = this;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // 2. Draw non-ring bonds
-    const ringAtomSet = new Set(
-      molecule.aromaticRings.flatMap(r => r.atoms)
-    );
+    const { reactants, products } = parseReactionSMILES(smiles);
 
-    // Bonds between ring atoms are drawn as part of the polygon above;
-    // draw all other bonds here.
-    molecule.bonds.forEach(bond => {
-      const fromInRing = ringAtomSet.has(bond.from);
-      const toInRing   = ringAtomSet.has(bond.to);
+    const arrowZoneWidth = 100;
+    const panelWidth     = (canvas.width - arrowZoneWidth) / 2;
+    const arrowX1        = panelWidth + 10;
+    const arrowX2        = panelWidth + arrowZoneWidth - 10;
+    const arrowY         = canvas.height / 2;
 
-      if (fromInRing && toInRing) {
-        // Skip – ring edges already drawn as polygon
-        return;
-      }
-
-      const a1 = molecule.atoms[bond.from];
-      const a2 = molecule.atoms[bond.to];
-
-      if (fromInRing) {
-        // Bond from ring vertex to substituent
-        const ring = molecule.getRingForAtom(bond.from);
-        if (ring) {
-          attachSubstituentToRing(ctx, ring, bond.from, a2);
-        } else {
-          drawBond(ctx, a1, a2, bond.order);
-        }
-      } else if (toInRing) {
-        const ring = molecule.getRingForAtom(bond.to);
-        if (ring) {
-          attachSubstituentToRing(ctx, ring, bond.to, a1);
-        } else {
-          drawBond(ctx, a1, a2, bond.order);
-        }
-      } else {
-        drawBond(ctx, a1, a2, bond.order);
+    // Draw reactants (left panel, stacked vertically)
+    const reactantCellH = canvas.height / reactants.length;
+    reactants.forEach((smi, i) => {
+      const cx = panelWidth / 2;
+      const cy = reactantCellH * (i + 0.5);
+      try {
+        const mol = buildMolecule(smi, cx, cy);
+        renderMoleculeToCtx(mol, ctx);
+      } catch (e) {
+        ctx.save();
+        ctx.fillStyle    = '#c0392b';
+        ctx.font         = '12px sans-serif';
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Invalid: ' + smi, cx, cy);
+        ctx.restore();
       }
     });
 
-    // 3. Draw atom labels
-    molecule.atoms.forEach(atom => drawAtomLabel(ctx, atom));
+    // Draw "+" labels between reactants
+    if (reactants.length > 1) {
+      ctx.save();
+      ctx.fillStyle    = '#555';
+      ctx.font         = 'bold 18px sans-serif';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      for (let i = 0; i < reactants.length - 1; i++) {
+        const y = reactantCellH * (i + 1);
+        ctx.fillText('+', panelWidth / 2, y);
+      }
+      ctx.restore();
+    }
+
+    // Draw reaction arrow
+    drawReactionArrow(ctx, arrowX1, arrowY, arrowX2);
+
+    // Draw products (right panel, stacked vertically)
+    const productStartX = panelWidth + arrowZoneWidth;
+    const productCellH  = canvas.height / products.length;
+    products.forEach((smi, i) => {
+      const cx = productStartX + panelWidth / 2;
+      const cy = productCellH * (i + 0.5);
+      try {
+        const mol = buildMolecule(smi, cx, cy);
+        renderMoleculeToCtx(mol, ctx);
+      } catch (e) {
+        ctx.save();
+        ctx.fillStyle    = '#c0392b';
+        ctx.font         = '12px sans-serif';
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Invalid: ' + smi, cx, cy);
+        ctx.restore();
+      }
+    });
+
+    // Draw "+" labels between products
+    if (products.length > 1) {
+      ctx.save();
+      ctx.fillStyle    = '#555';
+      ctx.font         = 'bold 18px sans-serif';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      for (let i = 0; i < products.length - 1; i++) {
+        const y = productCellH * (i + 1);
+        ctx.fillText('+', productStartX + panelWidth / 2, y);
+      }
+      ctx.restore();
+    }
+
+    this.reactionData = { reactants, products };
+    this.molecule = new Molecule(); // reset single-molecule state
   }
 
   /**
    * Convenience: parse + render in one call.
+   * Auto-detects reaction SMILES (contains '>>') vs single molecule.
    * @param {string} smiles
    */
   draw(smiles) {
-    this.parseSMILES(smiles);
-    this.render();
+    if (isReactionSMILES(smiles)) {
+      this.drawReactionScheme(smiles);
+    } else {
+      this.parseSMILES(smiles);
+      this.render();
+    }
   }
 }
 
@@ -426,6 +608,11 @@ if (typeof module !== 'undefined' && module.exports) {
     drawAtomLabel,
     attachSubstituentToRing,
     attachMultipleSubstituentsToRing,
-    elementColor
+    elementColor,
+    isReactionSMILES,
+    parseReactionSMILES,
+    buildMolecule,
+    renderMoleculeToCtx,
+    drawReactionArrow
   };
 }
