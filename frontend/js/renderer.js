@@ -83,7 +83,18 @@ function layoutMolecule(molecule, startX, startY) {
     });
   }
 
-  // Seed: first atom
+  // Grow substituents outward from each ring attachment point first,
+  // so chains connected to rings are correctly positioned outside the ring.
+  molecule.aromaticRings.forEach(ring => {
+    ring.atoms.forEach(atomIdx => {
+      const vertex = ring.getVertexForAtom(atomIdx);
+      if (vertex) {
+        placeNeighbours(atomIdx, -1, vertex.angle);
+      }
+    });
+  });
+
+  // Seed: first atom (only if not yet placed via ring traversal above)
   if (!placed.has(0)) {
     atoms[0].x = startX;
     atoms[0].y = startY;
