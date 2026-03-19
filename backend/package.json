@@ -1,0 +1,21 @@
+{
+  "name": "reagent-identifier-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Reagent Identifier",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest 2>/dev/null || node tests/test.js"
+  },
+  "keywords": [
+    "chemistry",
+    "reagent",
+    "SMILES"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "express-rate-limit": "^8.3.1"
+  }
+}

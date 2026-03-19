@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reagent Identifier – Chemical Structure Viewer</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<header>
+  <span class="logo">🧪</span>
+  <h1>Reagent Identifier</h1>
+  <p>Vertex-based benzene ring renderer &nbsp;|&nbsp; SMILES → 2D structure</p>
+</header>
+
+<main>
+
+  <!-- Input card -->
+  <section class="card">
+    <h2>Enter SMILES String</h2>
+
+    <div class="input-row">
+      <input
+        id="smiles-input"
+        type="text"
+        placeholder="e.g. c1ccccc1C(=O)O"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="btn btn-primary" id="btn-draw">Draw Structure</button>
+      <button class="btn btn-secondary" id="btn-clear">Clear</button>
+    </div>
+
+    <!-- Quick-access examples -->
+    <div class="examples">
+      <span class="example-chip" data-smiles="c1ccccc1">Benzene</span>
+      <span class="example-chip" data-smiles="c1ccccc1C(=O)O">Benzoic acid</span>
+      <span class="example-chip" data-smiles="c1cc(F)c(Cl)cc1">1-F-2-Cl-benzene</span>
+      <span class="example-chip" data-smiles="c1ccncc1">Pyridine</span>
+      <span class="example-chip" data-smiles="c1ccoc1">Furan</span>
+      <span class="example-chip" data-smiles="c1ccccc1N">Aniline</span>
+      <span class="example-chip" data-smiles="CC(=O)Oc1ccccc1C(=O)O">Aspirin</span>
+    </div>
+
+    <div id="status-bar"></div>
+  </section>
+
+  <!-- Canvas card -->
+  <section class="card">
+    <h2>2D Structure</h2>
+
+    <div class="canvas-wrapper">
+      <canvas
+        id="structure-canvas"
+        width="720"
+        height="420"
+        title="2D chemical structure"
+      ></canvas>
+    </div>
+
+    <!-- Colour legend -->
+    <div class="legend">
+      <span class="legend-item">
+        <span class="legend-dot" style="background:#222"></span> C
+      </span>
+      <span class="legend-item">
+        <span class="legend-dot" style="background:#3050f8"></span> N
+      </span>
+      <span class="legend-item">
+        <span class="legend-dot" style="background:#ff0d0d"></span> O
+      </span>
+      <span class="legend-item">
+        <span class="legend-dot" style="background:#ffff30;border:1px solid #aaa"></span> S
+      </span>
+      <span class="legend-item">
+        <span class="legend-dot" style="background:#90e050"></span> F
+      </span>
+      <span class="legend-item">
+        <span class="legend-dot" style="background:#1ff01f"></span> Cl
+      </span>
+    </div>
+  </section>
+
+  <!-- Info card -->
+  <section class="card">
+    <h2>Molecule Information</h2>
+    <div id="info-panel">
+      <em>Draw a structure above to see details.</em>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Reagent Identifier &copy; 2024 &mdash; Benzene ring substituents attach to ring
+  <strong>vertices</strong>, not the ring center.
+</footer>
+
+<!-- Core libraries (load in order) -->
+<script src="js/smiles.js"></script>
+<script src="js/aromatic.js"></script>
+<script src="js/renderer.js"></script>
+
+<!-- App bootstrap -->
+<script>
+(function () {
+  'use strict';
+
+  const input    = document.getElementById('smiles-input');
+  const btnDraw  = document.getElementById('btn-draw');
+  const btnClear = document.getElementById('btn-clear');
+  const statusEl = document.getElementById('status-bar');
+  const infoEl   = document.getElementById('info-panel');
+  const chips    = document.querySelectorAll('.example-chip');
+
+  const renderer = new ChemicalStructureRenderer('structure-canvas');
+
+  function setStatus(msg, type = '') {
+    statusEl.textContent = msg;
+    statusEl.className   = type;
+  }
+
+  function drawSmiles(smiles) {
+    smiles = smiles.trim();
+    if (!smiles) { setStatus('Please enter a SMILES string.', 'error'); return; }
+
+    try {
+      renderer.draw(smiles);
+      setStatus(`✅ Rendered: ${smiles}`, 'success');
+      showInfo(renderer.molecule, smiles);
+    } catch (err) {
+      setStatus('⚠️ Error: ' + err.message, 'error');
+      console.error(err);
+    }
+  }
+
+  function showInfo(molecule, smiles) {
+    const atomCounts = {};
+    molecule.atoms.forEach(a => {
+      const sym = (a.symbol || 'C').toUpperCase();
+      atomCounts[sym] = (atomCounts[sym] || 0) + 1;
+    });
+    const formula = Object.entries(atomCounts)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([sym, n]) => `${sym}${n > 1 ? n : ''}`)
+      .join('');
+
+    const ringInfo = molecule.aromaticRings.length > 0
+      ? molecule.aromaticRings
+          .map(r => `${r.ringSize === 6 ? 'Hexagonal' : 'Pentagonal'} aromatic ring`)
+          .join(', ')
+      : 'None detected';
+
+    infoEl.innerHTML = `
+      <table>
+        <tr><td>SMILES</td><td><code>${escapeHtml(smiles)}</code></td></tr>
+        <tr><td>Atom count</td><td>${molecule.atoms.length}</td></tr>
+        <tr><td>Bond count</td><td>${molecule.bonds.length}</td></tr>
+        <tr><td>Formula</td><td>${formula}</td></tr>
+        <tr><td>Aromatic rings</td><td>${ringInfo}</td></tr>
+        <tr><td>Ring attachment</td><td>✅ Vertex-based (not center)</td></tr>
+      </table>
+    `;
+  }
+
+  function escapeHtml(str) {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  // Bind events
+  btnDraw.addEventListener('click', () => drawSmiles(input.value));
+  btnClear.addEventListener('click', () => {
+    input.value = '';
+    renderer.draw('');
+    setStatus('');
+    infoEl.innerHTML = '<em>Draw a structure above to see details.</em>';
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') drawSmiles(input.value);
+  });
+
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      input.value = chip.dataset.smiles;
+      drawSmiles(chip.dataset.smiles);
+    });
+  });
+
+  // Draw default on load
+  input.value = 'c1ccccc1C(=O)O';
+  drawSmiles('c1ccccc1C(=O)O');
+})();
+</script>
+
+</body>
+</html>
