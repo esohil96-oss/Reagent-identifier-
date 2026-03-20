@@ -72,20 +72,11 @@ function applyNaBH4(smiles) {
     // STEP 1: Convert C=O → C–O
     bond.order = 1;
 
-    // STEP 2: Add explicit hydrogen to oxygen (OH formation)
-    const hydrogenO = {
-      index: product.atoms.length,
-      symbol: 'H',
-      isAromatic: false,
-      charge: 0,
-      hCount: 0
-    };
-    product.atoms.push(hydrogenO);
-    product.bonds.push({
-      from: oxygenIndex,
-      to: hydrogenO.index,
-      order: 1
-    });
+    // STEP 2: Mark the oxygen as carrying one implicit hydrogen (OH group).
+    // Do NOT add an explicit H atom node — this keeps the SMILES clean and
+    // prevents the 2D layout engine from misplacing a stray H atom.
+    const oxygenAtom = product.atoms[oxygenIndex];
+    oxygenAtom.hCount = (oxygenAtom.hCount || 0) + 1;
 
     reactionFound = true;
     break; // Only reduce the first carbonyl group

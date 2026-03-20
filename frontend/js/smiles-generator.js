@@ -58,7 +58,12 @@ function moleculeToSMILES(atoms, bonds) {
 
   function atomStr(a) {
     if (a.isAromatic) return a.symbol.toLowerCase();
-    // OH group stored as O (oxygen; implicit H handled by valence)
+    // If the atom carries explicit hCount (e.g. oxygen after NaBH4 reduction),
+    // emit it in bracket notation so parsers know the H count is intentional.
+    if (a.hCount > 0) {
+      const hPart = a.hCount === 1 ? 'H' : `H${a.hCount}`;
+      return `[${a.symbol}${hPart}]`;
+    }
     return a.symbol;
   }
 

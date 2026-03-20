@@ -93,7 +93,7 @@ function parseSMILES(smiles) {
       continue;
     }
 
-    // Bracketed atom: [NH3+], [OH-], etc.
+    // Bracketed atom: [NH3+], [OH-], [OH], etc.
     if (ch === '[') {
       const end = smiles.indexOf(']', i);
       if (end === -1) throw new Error('Unclosed bracket in SMILES at position ' + i);
@@ -101,7 +101,17 @@ function parseSMILES(smiles) {
       // Extract element symbol (first uppercase + optional lowercase)
       const symbolMatch = inner.match(/([A-Z][a-z]?|[cnospbif])/);
       const symbol = symbolMatch ? symbolMatch[1] : 'C';
+      // Parse explicit H count from the part of the bracket AFTER the element symbol
+      // (e.g. [OH] → hCount=1, [CH3] → hCount=3; avoids matching H in symbols like [Hg])
+      const afterSymbol = symbolMatch
+        ? inner.slice(symbolMatch.index + symbolMatch[1].length)
+        : inner;
+      const hMatch = afterSymbol.match(/H(\d*)/);
+      const hCount = hMatch ? (hMatch[1] === '' ? 1 : parseInt(hMatch[1], 10)) : 0;
       const atomIdx = addAtom(symbol);
+      if (hCount > 0) {
+        atoms[atomIdx].hCount = hCount;
+      }
       if (prevAtomIdx !== null) {
         addBond(prevAtomIdx, atomIdx, pendingBondOrder);
         pendingBondOrder = 1;
