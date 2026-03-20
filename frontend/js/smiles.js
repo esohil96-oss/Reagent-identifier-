@@ -103,10 +103,11 @@ function parseSMILES(smiles) {
       const symbol = symbolMatch ? symbolMatch[1] : 'C';
       // Parse explicit H count from the part of the bracket AFTER the element symbol
       // (e.g. [OH] → hCount=1, [CH3] → hCount=3; avoids matching H in symbols like [Hg])
+      // Only attempt H-count parsing when a valid element symbol was found.
       const afterSymbol = symbolMatch
         ? inner.slice(symbolMatch.index + symbolMatch[1].length)
-        : inner;
-      const hMatch = afterSymbol.match(/H(\d*)/);
+        : null;
+      const hMatch = afterSymbol ? afterSymbol.match(/H(\d*)/) : null;
       const hCount = hMatch ? (hMatch[1] === '' ? 1 : parseInt(hMatch[1], 10)) : 0;
       const atomIdx = addAtom(symbol);
       if (hCount > 0) {
