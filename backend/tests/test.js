@@ -109,6 +109,37 @@ console.log('\n[detectAromaticRings]');
   assert(rings.length === 0, 'Hexane: no aromatic rings');
 })();
 
+(function testKekule_BenzeneRingDetected() {
+  // Kekulé benzene: alternating single/double bonds, uppercase C atoms
+  const { atoms, bonds } = parseSMILES('C1=CC=CC=C1');
+  const rings = detectAromaticRings(atoms, bonds);
+  assert(rings.length === 1, 'Kekulé benzene: 1 ring detected');
+  assert(rings[0].ringSize === 6, 'Kekulé benzene: ring size = 6');
+  assert(rings[0].isAromatic, 'Kekulé benzene: ring is aromatic');
+})();
+
+(function testKekule_BenzeneWithSubstituentDetected() {
+  // Kekulé benzaldehyde: substituent on Kekulé benzene ring
+  const { atoms, bonds } = parseSMILES('O=CC1=CC=CC=C1');
+  const rings = detectAromaticRings(atoms, bonds);
+  assert(rings.length === 1, 'Kekulé benzaldehyde: 1 ring detected');
+  assert(rings[0].ringSize === 6, 'Kekulé benzaldehyde: ring is aromatic');
+})();
+
+(function testNoRingForCyclohexane() {
+  // Cyclohexane: 6-membered ring but all single bonds → NOT aromatic
+  const { atoms, bonds } = parseSMILES('C1CCCCC1');
+  const rings = detectAromaticRings(atoms, bonds);
+  assert(rings.length === 0, 'Cyclohexane: no aromatic rings (all single bonds)');
+})();
+
+(function testNoRingForCyclohexadiene() {
+  // Cyclohexadiene: 6-membered ring with 2 double bonds → NOT aromatic
+  const { atoms, bonds } = parseSMILES('C1=CCC=CC1');
+  const rings = detectAromaticRings(atoms, bonds);
+  assert(rings.length === 0, 'Cyclohexadiene: no aromatic rings (only 2 double bonds)');
+})();
+
 // ── generateBenzeneVertices ─────────────────────────────────────────────────
 console.log('\n[generateBenzeneVertices]');
 
