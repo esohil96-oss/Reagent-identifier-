@@ -61,9 +61,26 @@ function detectAromaticRings(atoms, bonds) {
     dfs(i, i, [i], pathSet);
   }
 
-  // Filter to aromatic rings only (all atoms in ring are aromatic)
+  /**
+   * Return true if the ring is a Kekulé-form aromatic ring:
+   * a 6-membered ring of carbon/nitrogen atoms with exactly 3 double bonds.
+   */
+  function isKekuleAromatic(ring) {
+    if (ring.length !== 6) return false;
+    const aromaticSymbols = new Set(['C', 'N', 'c', 'n']);
+    if (!ring.every(idx => atoms[idx] && aromaticSymbols.has(atoms[idx].symbol))) return false;
+    const ringBonds = bonds.filter(b => ring.includes(b.from) && ring.includes(b.to));
+    const doubleBondCount = ringBonds.filter(b => b.order === 2).length;
+    return doubleBondCount === 3;
+  }
+
+  // Filter to aromatic rings: all atoms have isAromatic=true (SMILES aromatic notation)
+  // OR the ring is a Kekulé benzene (6-membered, C/N atoms, exactly 3 double bonds).
   return rings
-    .filter(ring => ring.every(idx => atoms[idx] && atoms[idx].isAromatic))
+    .filter(ring =>
+      ring.every(idx => atoms[idx] && atoms[idx].isAromatic) ||
+      isKekuleAromatic(ring)
+    )
     .map(ring => {
       const ringBonds = bonds
         .map((b, bi) => ({ b, bi }))

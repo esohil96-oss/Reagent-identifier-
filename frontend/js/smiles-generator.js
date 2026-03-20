@@ -67,17 +67,23 @@ function moleculeToSMILES(atoms, bonds) {
     return a.symbol;
   }
 
-  function bondStr(order) {
+  function bondStr(order, fromIdx, toIdx) {
+    // Bonds between two aromatic atoms are implicit in SMILES – never use '='
+    if (fromIdx !== undefined && toIdx !== undefined &&
+        atoms[fromIdx] && atoms[toIdx] &&
+        atoms[fromIdx].isAromatic && atoms[toIdx].isAromatic) {
+      return '';
+    }
     if (order === 2) return '=';
     if (order === 3) return '#';
     return ''; // single bond is implicit
   }
 
-  function dfs(v, parentBondIdx, incomingBondOrder) {
+  function dfs(v, parentBondIdx, incomingBondOrder, parentAtomIdx) {
     visited2.add(v);
 
     // Incoming bond character (skip for first atom)
-    if (parentBondIdx !== -1) smiles += bondStr(incomingBondOrder);
+    if (parentBondIdx !== -1) smiles += bondStr(incomingBondOrder, parentAtomIdx, v);
 
     // Atom symbol
     smiles += atomStr(atoms[v]);
@@ -88,7 +94,7 @@ function moleculeToSMILES(atoms, bonds) {
       const digit = ringDigits[bondIdx];
       if (visited2.has(to)) {
         // Closing the ring: write bond order (if non-single) + digit
-        smiles += bondStr(order) + digit;
+        smiles += bondStr(order, v, to) + digit;
       } else {
         // Opening the ring: just write the digit (bond order written at close)
         smiles += digit;
@@ -103,12 +109,12 @@ function moleculeToSMILES(atoms, bonds) {
     children.forEach(({ to, order, bondIdx }, i) => {
       const isLast = i === children.length - 1;
       if (!isLast) smiles += '(';
-      dfs(to, bondIdx, order);
+      dfs(to, bondIdx, order, v);
       if (!isLast) smiles += ')';
     });
   }
 
-  dfs(0, -1, 0);
+  dfs(0, -1, 0, -1);
   return smiles;
 }
 

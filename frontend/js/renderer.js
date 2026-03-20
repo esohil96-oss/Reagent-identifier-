@@ -270,17 +270,17 @@ function drawAtomLabel(ctx, atom) {
   const label = base + hSuffix;
 
   ctx.font = ATOM_FONT;
-  ctx.fillStyle = elementColor(atom.symbol);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // White background — widen for multi-char labels like "OH"
+  // White rectangle background — masks bond lines under the label without
+  // creating the visual appearance of a circle around the atom.
   const metrics = ctx.measureText(label);
-  const bgRadius = Math.max(ATOM_RADIUS + 1, metrics.width / 2 + 3);
+  const pad = 2;
+  const bgW = metrics.width + pad * 2;
+  const bgH = 14; // approximate font cap height
   ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(atom.x, atom.y, bgRadius, 0, 2 * Math.PI);
-  ctx.fill();
+  ctx.fillRect(atom.x - bgW / 2, atom.y - bgH / 2, bgW, bgH);
 
   ctx.fillStyle = elementColor(atom.symbol);
   ctx.fillText(label, atom.x, atom.y);
@@ -310,11 +310,13 @@ function elementColor(symbol) {
 /**
  * Draw a bond from a ring vertex outward to a substituent atom.
  * ✅ CORRECT: bond starts at vertex, not ring center.
+ * Shortens the bond endpoint when the substituent atom carries a text label
+ * so the line does not overlap the label text.
  *
  * @param {CanvasRenderingContext2D} ctx
  * @param {AromaticRing} ring
  * @param {number} atomIndex        ring atom (attachment point)
- * @param {{x:number,y:number}} substituentAtom
+ * @param {{x:number,y:number,symbol:string,hCount:number}} substituentAtom
  */
 function attachSubstituentToRing(ctx, ring, atomIndex, substituentAtom) {
   const vertex = ring.getVertexForAtom(atomIndex);
@@ -323,10 +325,20 @@ function attachSubstituentToRing(ctx, ring, atomIndex, substituentAtom) {
     return;
   }
 
+  // Shorten the far end of the bond when the substituent has a label
+  const dx = substituentAtom.x - vertex.x;
+  const dy = substituentAtom.y - vertex.y;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const clearance = needsLabel(substituentAtom) ? ATOM_RADIUS : 0;
+  const x2 = substituentAtom.x - ux * clearance;
+  const y2 = substituentAtom.y - uy * clearance;
+
   // ✅ Bond starts at ring VERTEX, not center
   ctx.strokeStyle = '#222';
   ctx.lineWidth = 1.5;
-  line(ctx, vertex.x, vertex.y, substituentAtom.x, substituentAtom.y);
+  line(ctx, vertex.x, vertex.y, x2, y2);
 }
 
 /**
