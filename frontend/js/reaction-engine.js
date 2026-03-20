@@ -31,33 +31,68 @@ const NABH4_INFO = {
 /**
  * Apply NaBH4 reduction to a SMILES string.
  *
- * Finds every C=O bond (where one atom is oxygen and the other carbon),
- * changes the bond order from 2 to 1, and returns the product SMILES.
+ * Finds the first C=O bond (aldehyde, ketone, or acid chloride carbonyl),
+ * reduces it to C–OH by converting the double bond to a single bond and
+ * attaching an explicit hydrogen to the oxygen atom.
  * C=C double bonds are left intact (NaBH4 does not reduce isolated alkenes).
  *
  * @param {string} smiles  Reactant SMILES
  * @returns {{ productSmiles: string, reactionFound: boolean }}
  */
 function applyNaBH4(smiles) {
-  const { atoms, bonds } = parseSMILES(smiles);
+  const parsed = parseSMILES(smiles);
 
-  // Find C=O bonds (aldehydes, ketones, or the carbonyl in acid chlorides)
+  // Deep clone atoms and bonds so the original parse result is not mutated
+  const product = {
+    atoms: parsed.atoms.map(a => ({ ...a })),
+    bonds: parsed.bonds.map(b => ({ ...b }))
+  };
+
   let reactionFound = false;
-  const modifiedBonds = bonds.map(b => {
-    if (b.order !== 2) return b;
-    const sym1 = (atoms[b.from].symbol || '').toUpperCase();
-    const sym2 = (atoms[b.to].symbol || '').toUpperCase();
-    const isCarbonyl = (sym1 === 'O' && sym2 === 'C') ||
-                       (sym1 === 'C' && sym2 === 'O');
-    if (isCarbonyl) {
-      reactionFound = true;
-      return { ...b, order: 1 }; // reduce C=O → C–O (alcohol)
+
+  for (const bond of product.bonds) {
+    if (bond.order !== 2) continue;
+
+    const atom1 = product.atoms[bond.from];
+    const atom2 = product.atoms[bond.to];
+
+    let carbon = null;
+    let oxygen = null;
+
+    if (atom1.symbol === 'C' && atom2.symbol === 'O') {
+      carbon = atom1;
+      oxygen = atom2;
+    } else if (atom1.symbol === 'O' && atom2.symbol === 'C') {
+      carbon = atom2;
+      oxygen = atom1;
     }
-    return b;
-  });
+
+    if (!carbon || !oxygen) continue;
+
+    // STEP 1: Convert C=O → C–O
+    bond.order = 1;
+
+    // STEP 2: Add explicit hydrogen to oxygen (OH formation)
+    const hydrogenO = {
+      index: product.atoms.length,
+      symbol: 'H',
+      isAromatic: false,
+      charge: 0,
+      hCount: 0
+    };
+    product.atoms.push(hydrogenO);
+    product.bonds.push({
+      from: oxygen.index,
+      to: hydrogenO.index,
+      order: 1
+    });
+
+    reactionFound = true;
+    break; // Only reduce the first carbonyl group
+  }
 
   const productSmiles = reactionFound
-    ? moleculeToSMILES(atoms, modifiedBonds)
+    ? moleculeToSMILES(product.atoms, product.bonds)
     : smiles; // return unchanged if no reducible group found
 
   return { productSmiles, reactionFound };
