@@ -262,16 +262,24 @@ function drawAromaticRing(ctx, ring) {
 function drawAtomLabel(ctx, atom) {
   if (!needsLabel(atom)) return;
 
-  const label = atom.symbol.charAt(0).toUpperCase() + atom.symbol.slice(1);
+  // Build label: base symbol + H suffix if hCount > 0 (e.g. "OH", "NH2")
+  const base = atom.symbol.charAt(0).toUpperCase() + atom.symbol.slice(1);
+  const hSuffix = atom.hCount > 0
+    ? (atom.hCount === 1 ? 'H' : `H${atom.hCount}`)
+    : '';
+  const label = base + hSuffix;
+
   ctx.font = ATOM_FONT;
   ctx.fillStyle = elementColor(atom.symbol);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // White background circle
+  // White background — widen for multi-char labels like "OH"
+  const metrics = ctx.measureText(label);
+  const bgRadius = Math.max(ATOM_RADIUS + 1, metrics.width / 2 + 3);
   ctx.fillStyle = '#fff';
   ctx.beginPath();
-  ctx.arc(atom.x, atom.y, ATOM_RADIUS + 1, 0, 2 * Math.PI);
+  ctx.arc(atom.x, atom.y, bgRadius, 0, 2 * Math.PI);
   ctx.fill();
 
   ctx.fillStyle = elementColor(atom.symbol);
