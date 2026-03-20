@@ -57,17 +57,17 @@ function applyNaBH4(smiles) {
     const atom2 = product.atoms[bond.to];
 
     let carbon = null;
-    let oxygen = null;
+    let oxygenIndex = null;
 
     if (atom1.symbol === 'C' && atom2.symbol === 'O') {
       carbon = atom1;
-      oxygen = atom2;
+      oxygenIndex = bond.to;
     } else if (atom1.symbol === 'O' && atom2.symbol === 'C') {
       carbon = atom2;
-      oxygen = atom1;
+      oxygenIndex = bond.from;
     }
 
-    if (!carbon || !oxygen) continue;
+    if (!carbon || oxygenIndex === null) continue;
 
     // STEP 1: Convert C=O → C–O
     bond.order = 1;
@@ -82,7 +82,7 @@ function applyNaBH4(smiles) {
     };
     product.atoms.push(hydrogenO);
     product.bonds.push({
-      from: oxygen.index,
+      from: oxygenIndex,
       to: hydrogenO.index,
       order: 1
     });
