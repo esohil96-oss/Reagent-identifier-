@@ -414,7 +414,8 @@ function parseReactionSMILES(smiles) {
 function buildMolecule(smiles, cx, cy) {
   const { atoms, bonds } = parseSMILES(smiles);
   const molecule = new Molecule();
-  molecule.atoms = atoms.map(a => ({ ...a, x: 0, y: 0 }));
+  // Reset all coordinates to null so layoutMolecule always starts fresh
+  molecule.atoms = atoms.map(a => ({ ...a, x: null, y: null }));
   molecule.bonds = bonds;
 
   const rawRings = detectAromaticRings(atoms, bonds);
@@ -533,7 +534,9 @@ class ChemicalStructureRenderer {
     const { atoms, bonds } = parseSMILES(smiles);
 
     this.molecule = new Molecule();
-    this.molecule.atoms = atoms.map(a => ({ ...a, x: 0, y: 0 }));
+    // Reset all coordinates to null so layoutMolecule always starts fresh
+    // (do NOT reuse old positions from a previous render).
+    this.molecule.atoms = atoms.map(a => ({ ...a, x: null, y: null }));
     this.molecule.bonds = bonds;
 
     const cx = this.canvas.width  / 2;

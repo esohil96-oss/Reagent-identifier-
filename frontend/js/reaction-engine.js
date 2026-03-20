@@ -82,6 +82,34 @@ function applyNaBH4(smiles) {
     break; // Only reduce the first carbonyl group
   }
 
+  if (reactionFound) {
+    // Remove atoms that have no bonds (isolated atoms left by the reaction)
+    // and also remove any invalid bonds that reference missing atoms.
+    const bonded = new Set();
+    product.bonds.forEach(b => { bonded.add(b.from); bonded.add(b.to); });
+
+    // Map old atom indices → new compacted indices
+    const oldToNew = new Map();
+    const compactAtoms = [];
+    product.atoms.forEach((a, i) => {
+      if (bonded.has(i)) {
+        oldToNew.set(i, compactAtoms.length);
+        compactAtoms.push({ ...a, index: compactAtoms.length });
+      }
+    });
+
+    // Remap bond endpoints; drop bonds whose endpoints were removed
+    const compactBonds = product.bonds
+      .filter(b => oldToNew.has(b.from) && oldToNew.has(b.to))
+      .map(b => ({ ...b, from: oldToNew.get(b.from), to: oldToNew.get(b.to) }));
+
+    // Only compact if there are still atoms left (safety guard)
+    if (compactAtoms.length > 0) {
+      product.atoms = compactAtoms;
+      product.bonds = compactBonds;
+    }
+  }
+
   const productSmiles = reactionFound
     ? moleculeToSMILES(product.atoms, product.bonds)
     : smiles; // return unchanged if no reducible group found

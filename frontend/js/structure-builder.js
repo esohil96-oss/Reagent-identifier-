@@ -117,10 +117,29 @@ class StructureBuilder {
     const idToIdx = {};
     this.atoms.forEach((a, i) => { idToIdx[a.id] = i; });
 
+    // Build a set of atom IDs that participate in at least one double bond
+    // (computed once to avoid O(atoms × bonds) iteration per OH atom)
+    const atomsWithDoubleBond = new Set();
+    this.bonds.forEach(b => {
+      if (b.order === 2) {
+        atomsWithDoubleBond.add(b.from);
+        atomsWithDoubleBond.add(b.to);
+      }
+    });
+
     const graphAtoms = this.atoms.map((a, i) => {
-      // OH → O with implicit H (symbol stored as O)
-      const sym = a.symbol === 'OH' ? 'O' : a.symbol;
-      return { index: i, symbol: sym, isAromatic: false };
+      // OH tool → oxygen; set hCount=1 when connected by single bond only
+      // (e.g. alcohol or phenol), but not for carbonyl C=O where the user
+      // used the OH tool to represent the oxygen of a double bond.
+      if (a.symbol === 'OH') {
+        return {
+          index: i,
+          symbol: 'O',
+          isAromatic: false,
+          hCount: atomsWithDoubleBond.has(a.id) ? 0 : 1
+        };
+      }
+      return { index: i, symbol: a.symbol, isAromatic: false };
     });
 
     const graphBonds = [];
